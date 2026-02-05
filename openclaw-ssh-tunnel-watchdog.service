@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenClaw SSH tunnel watchdog (user)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/d/.openclaw/openclaw-ssh-tunnel-watchdog.sh
+
+[Install]
+WantedBy=default.target

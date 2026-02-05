@@ -1,0 +1,43 @@
+{
+  "name": "GitHub Push → Ingest (Obsidian .md)",
+  "nodes": [
+    {
+      "name": "Webhook (github-push)",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-push",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "name": "Filter Changed Files",
+      "type": "Function",
+      "parameters": {
+        "functionCode": "// Recebe payload do GitHub push e extrai commits[].added + commits[].modified\n// Filtra apenas .md, ignora .obsidian/** e attachments\nconst payload = items[0].json;\nconst files = [];\nif(payload.commits){\n  for(const c of payload.commits){\n    for(const p of (c.added||[]).concat(c.modified||[])) files.push(p);\n  }\n}\nconst md = files.filter(f => f.endsWith('.md') && !f.startsWith('.obsidian/'))\nreturn md.map(p => ({json:{path:p, repo:payload.repository.full_name, ref: payload.ref}}));"
+      }
+    },
+    {
+      "name": "Get file content (GitHub)",
+      "type": "HTTP Request",
+      "parameters": {
+        "authentication": "headerAuth",
+        "url": "=https://api.github.com/repos/{{$json["repo"]}}/contents/{{$json["path"]}}?ref={{$json["ref"]}}",
+        "options": {"headerParameters":{"Authorization":"Bearer {{$env.GITHUB_TOKEN}}","Accept":"application/vnd.github.v3.raw"}},
+        "responseFormat": "json"
+      }
+    },
+    {
+      "name": "Call /ingest webhook",
+      "type": "HTTP Request",
+      "parameters": {
+        "url": "=https://{{$env.N8N_HOST}}/webhook/ingest",
+        "method": "POST",
+        "options": {"headerParameters":{"X-Shared-Secret":"{{$env.SHARED_SECRET}}","Content-Type":"application/json"}},
+        "body": "=JSON.stringify({repo: $json[\"repo\"], branch: ("main"), source_path: $json[\"path\"], markdown: $json[\"content\"], git: {sha: $json[\"sha\"] || null, author: $json[\"author\"] || null}})"
+      }
+    }
+  ],
+  "connections": {}
+}

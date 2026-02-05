@@ -1,0 +1,11 @@
+{
+  "name": "/rag (Query -> match_kb_chunks)",
+  "nodes": [
+    {"name": "Webhook (rag)", "type": "n8n-nodes-base.webhook", "parameters": {"httpMethod":"POST","path":"rag","responseMode":"onReceived"}},
+    {"name":"Auth Check","type":"Function","parameters":{"functionCode":"const secret = $env.SHARED_SECRET; if(items[0].json['_headers'] && items[0].json['_headers']['x-shared-secret']==secret){ return items; } throw new Error('Unauthorized');"}},
+    {"name":"Compute Query Embedding","type":"HTTP Request","parameters":{"url":"={{$env.EMBEDDINGS_PROVIDER_URL}}","method":"POST","options":{"headerParameters":{"Authorization":"Bearer {{$env.EMBEDDINGS_API_KEY}}","Content-Type":"application/json"}},"body":"=JSON.stringify({input: $json.query, model: $env.EMBEDDINGS_MODEL})","responseFormat":"json"}},
+    {"name":"Call Supabase RPC","type":"HTTP Request","parameters":{"url":"={{$env.SUPABASE_URL}}/rpc/match_kb_chunks","method":"POST","options":{"headerParameters":{"apikey":"{{$env.SUPABASE_SERVICE_ROLE_KEY}}","Content-Type":"application/json"}},"body":"=JSON.stringify({query_embedding: $json.embedding, match_count: $json.top_k || 8, filter: $json.filter || {}})","responseFormat":"json"}},
+    {"name":"Return contexts","type":"Function","parameters":{"functionCode":"return [{json:{contexts: items[0].json}}];"}}
+  ],
+  "connections": {}
+}

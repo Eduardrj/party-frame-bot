@@ -1,0 +1,36 @@
+{
+  "name": "/ingest (Markdown -> chunks -> embeddings -> upsert)",
+  "nodes": [
+    {
+      "name": "Webhook (ingest)",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {"httpMethod":"POST","path":"ingest","responseMode":"onReceived"}
+    },
+    {
+      "name": "Auth Check",
+      "type": "Function",
+      "parameters": {"functionCode":"const secret = $env.SHARED_SECRET; if(items[0].json['_headers'] && items[0].json['_headers']['x-shared-secret']==secret){ return items; } throw new Error('Unauthorized');"}
+    },
+    {
+      "name": "Parse frontmatter",
+      "type": "Function",
+      "parameters": {"functionCode":"const raw = items[0].json.markdown || items[0].json.body || ''; const fm = {}; let body = raw; if(raw.startsWith('---')){ const parts = raw.split('---'); fm.yaml = parts[1]; body = parts.slice(2).join('---'); } items[0].json.frontmatter = fm; items[0].json.body = body; return items;"}
+    },
+    {
+      "name": "Chunker",
+      "type": "Function",
+      "parameters": {"functionCode":"// Simple char-based chunker with overlap\nconst text = items[0].json.body || ''; const chunkSize = parseInt($env.CHUNK_SIZE||1000); const overlap = parseInt($env.CHUNK_OVERLAP||200); const chunks=[]; for(let i=0, idx=0;i<text.length; idx++){ const start = idx*(chunkSize-overlap); const chunk = text.slice(start, start+chunkSize); if(!chunk) break; chunks.push({index: idx, content: chunk}); if(start+chunkSize>=text.length) break; idx++; } return chunks.map(c=>({json:{repo: items[0].json.repo, branch: items[0].json.branch, source_path: items[0].json.source_path, chunk_index:c.index, content:c.content}}));"}
+    },
+    {
+      "name": "Compute Embedding",
+      "type": "HTTP Request",
+      "parameters": {"url":"={{$env.EMBEDDINGS_PROVIDER_URL}}","method":"POST","options":{"headerParameters":{"Authorization":"Bearer {{$env.EMBEDDINGS_API_KEY}}","Content-Type":"application/json"}},"body":"=JSON.stringify({input: $json[\"content\"], model: $env.EMBEDDINGS_MODEL})","responseFormat":"json"}
+    },
+    {
+      "name": "Upsert to Supabase",
+      "type": "HTTP Request",
+      "parameters": {"url":"={{$env.SUPABASE_URL}}/rest/v1/kb_chunks","method":"POST","options":{"headerParameters":{"apikey":"{{$env.SUPABASE_SERVICE_ROLE_KEY}}","Content-Type":"application/json"}},"body":"=JSON.stringify({repo:$json.repo, branch:$json.branch, source_path:$json.source_path, chunk_index:$json.chunk_index, content:$json.content, content_hash: $json.content_hash || '', metadata: $json.metadata || {}, embedding: $json.embedding || null})","responseFormat":"json"}
+    }
+  ],
+  "connections": {}
+}

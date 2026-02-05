@@ -1,0 +1,19 @@
+[Unit]
+Description=Reverse SSH tunnel (OpenClaw) — expose PC:18793 -> VPS:10092
+After=network-online.target
+
+[Service]
+Type=simple
+# Use the dedicated key created on WSL: ~/.ssh/id_ed25519_openclaw_tunnel
+ExecStart=/usr/bin/ssh -N -o ExitOnForwardFailure=yes -o ConnectTimeout=10 -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -i /home/d/.ssh/id_ed25519_openclaw_tunnel -R 10092:localhost:18793 root@104.131.110.134
+Restart=on-failure
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=60
+KillMode=process
+TimeoutStartSec=20
+StandardOutput=append:/home/d/.openclaw/ssh-tunnel.log
+StandardError=append:/home/d/.openclaw/ssh-tunnel.log
+
+[Install]
+WantedBy=default.target
