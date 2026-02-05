@@ -1,0 +1,7 @@
+# Ignore tokens and credentials
+*.token
+*.key
+/root/.openclaw/
+/.openclaw/
+# local env
+.env
